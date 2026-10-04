@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+*.spec
+
+# Virtual env
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.suo
+*.user
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Tool specific - không push ảnh debug và file tạm
+templates/debug_*.png
+templates/sample_backpack.png
+*.log
+
+# Config cá nhân (nếu muốn giữ riêng)
+# config.json
