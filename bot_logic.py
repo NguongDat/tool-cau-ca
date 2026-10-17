@@ -57,6 +57,9 @@ class FishingBot:
         self.last_cast_time = 0.0
         self.last_minigame_seen = 0.0
         self.target_rect = None
+        self.last_pressed_qte_key = None
+        self.last_pressed_qte_pos = None
+        self.last_pressed_qte_time = 0.0
 
     # ── Config ──────────────────────────────────────────────────
     def load_config(self):
@@ -317,7 +320,7 @@ class FishingBot:
         disable_wasd = self.config.get("disable_wasd_movement", True)
 
         if is_minigame:
-            self._handle_minigame(frame, key_info, disable_wasd)
+            self._handle_minigame(frame, key_info)
         else:
             self._handle_no_minigame(frame)
 
@@ -340,16 +343,62 @@ class FishingBot:
                 "caught_count": self.fish_caught_count
             })
 
-    def _handle_minigame(self, frame, key_info, disable_wasd):
+    def _handle_minigame(self, frame, key_info):
         self.current_state = "FISHING"
         self.last_minigame_seen = time.time()
         is_fg = self._is_roblox_foreground()
 
         # Neu chat dang mo thi bo qua skill/WASD
         if self.vision.detect_chat_open(frame):
+            self.release_all_keys()
             return
 
         now = time.time()
+        disable_wasd = self.config.get("disable_wasd_movement", True)
+
+        # ── 1. ƯU TIÊN SỐ 1: BẤM PHÍM W/A/D NGAY LẬP TỨC ĐỂ KHÔNG MISS ──
+        if key_info and key_info.get("key"):
+            req_key = key_info["key"].lower()
+            cur_pos = key_info.get("pos")
+            self.active_key = req_key.upper()
+
+            is_new_prompt = False
+            if req_key != self.last_pressed_qte_key:
+                is_new_prompt = True
+            elif cur_pos and self.last_pressed_qte_pos:
+                dist = ((cur_pos[0] - self.last_pressed_qte_pos[0]) ** 2 + (cur_pos[1] - self.last_pressed_qte_pos[1]) ** 2) ** 0.5
+                if dist > 35:
+                    is_new_prompt = True
+
+            time_since_press = now - self.last_pressed_qte_time
+
+            # Chi go nhap nha (tap) 35ms khi co prompt moi hoac sau 280ms
+            if is_new_prompt or time_since_press >= 0.28:
+                if is_fg:
+                    di.tap_key(req_key, duration=0.035)
+                elif self.vision.roblox_hwnd:
+                    di.post_key_to_hwnd(self.vision.roblox_hwnd, req_key, duration=0.035)
+
+                self.last_pressed_qte_key = req_key
+                self.last_pressed_qte_pos = cur_pos
+                self.last_pressed_qte_time = now
+
+                # Neu bat che do dung yen: Bu phim nguoc lai 20ms de triet tieu hoan toan quan tinh di chuyen
+                if disable_wasd:
+                    counter_keys = {'w': 's', 's': 'w', 'a': 'd', 'd': 'a'}
+                    opp = counter_keys.get(req_key)
+                    if opp:
+                        time.sleep(0.010)
+                        if is_fg:
+                            di.tap_key(opp, duration=0.020)
+                        elif self.vision.roblox_hwnd:
+                            di.post_key_to_hwnd(self.vision.roblox_hwnd, opp, duration=0.020)
+        else:
+            self.active_key = None
+            self.last_pressed_qte_key = None
+            self.last_pressed_qte_pos = None
+
+        # ── 2. XẢ SKILL Z-X-C-V (KHÔNG LÀM CHẬM PHÍM W/A/D) ──
         ignore_tension = self.config.get("skills_ignore_tension", True)
         tension_safe = ignore_tension or (self.tension_status != "DANGER_HIGH")
         if tension_safe:
@@ -362,31 +411,14 @@ class FishingBot:
                 cd = float(s_cfg.get("cooldown", 5.0))
                 if now - self.skill_cooldowns.get(s_key, 0.0) >= cd:
                     if is_fg:
-                        di.tap_key(s_key.lower(), duration=0.02)
+                        di.tap_key(s_key.lower(), duration=0.025)
                     elif self.vision.roblox_hwnd:
                         di.post_key_to_hwnd(
-                            self.vision.roblox_hwnd, s_key.lower(), duration=0.02
+                            self.vision.roblox_hwnd, s_key.lower(), duration=0.025
                         )
                     self.skill_cooldowns[s_key] = now
-                    time.sleep(0.005)
                     if not burst_mode:
                         break
-
-        if not disable_wasd:
-            if key_info and key_info.get("key"):
-                req_key = key_info["key"].lower()
-                self.active_key = req_key.upper()
-                if is_fg:
-                    di.tap_key(req_key, duration=0.02)
-                elif self.vision.roblox_hwnd:
-                    di.post_key_to_hwnd(
-                        self.vision.roblox_hwnd, req_key, duration=0.02
-                    )
-                time.sleep(self.config.get("tap_delay_ms", 30) / 1000.0)
-            else:
-                self.active_key = None
-        else:
-            self.active_key = "DUNG YEN"
 
     def _handle_no_minigame(self, frame):
         caught_notification = self.vision.detect_caught_notification(frame)

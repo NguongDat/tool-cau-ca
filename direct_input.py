@@ -43,6 +43,15 @@ class Input(ctypes.Structure):
         ("ii", Input_I)
     ]
 
+try:
+    import ctypes
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
 # Constants
 KEYEVENTF_SCANCODE = 0x0008
 KEYEVENTF_KEYUP = 0x0002
@@ -67,82 +76,184 @@ SCANCODES = {
     '2': 0x03,
     '3': 0x04,
     '4': 0x05,
+    'up': 0x48,
+    'left': 0x4B,
+    'right': 0x4D,
+    'down': 0x50,
+}
+
+VK_CODES = {
+    'w': 0x57,
+    'a': 0x41,
+    's': 0x53,
+    'd': 0x44,
+    'z': 0x5A,
+    'x': 0x58,
+    'c': 0x43,
+    'v': 0x56,
+    'space': 0x20,
+    '1': 0x31,
+    '2': 0x32,
+    '3': 0x33,
+    '4': 0x34,
+    'up': 0x26,
+    'left': 0x25,
+    'right': 0x27,
+    'down': 0x28,
 }
 
 def press_key(key_char):
-    """Presses down a key via DirectInput scan code."""
+    """Presses down a key via pydirectinput and DirectInput scan code."""
     k = key_char.lower()
-    if k not in SCANCODES:
-        return
-    sc = SCANCODES[k]
-    extra = ctypes.c_ulong(0)
-    ii_ = Input_I()
-    ii_.ki = KeyBdInput(0, sc, KEYEVENTF_SCANCODE, 0, ctypes.pointer(extra))
-    x = Input(ctypes.c_ulong(INPUT_KEYBOARD), ii_)
-    ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+    try:
+        import pydirectinput
+        pydirectinput.FAILSAFE = False
+        pydirectinput.PAUSE = 0
+        pydirectinput.keyDown(k)
+    except Exception:
+        pass
+    sc = SCANCODES.get(k, 0)
+    vk = VK_CODES.get(k, 0)
+    if sc or vk:
+        try:
+            extra = ctypes.c_ulong(0)
+            ii_ = Input_I()
+            ii_.ki = KeyBdInput(vk, sc, KEYEVENTF_SCANCODE, 0, ctypes.pointer(extra))
+            x = Input(ctypes.c_ulong(INPUT_KEYBOARD), ii_)
+            ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+        except Exception:
+            pass
 
 def release_key(key_char):
-    """Releases a key via DirectInput scan code."""
+    """Releases a key cleanly via all mechanisms to prevent any stuck movement keys."""
     k = key_char.lower()
-    if k not in SCANCODES:
-        return
-    sc = SCANCODES[k]
-    extra = ctypes.c_ulong(0)
-    ii_ = Input_I()
-    ii_.ki = KeyBdInput(0, sc, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0, ctypes.pointer(extra))
-    x = Input(ctypes.c_ulong(INPUT_KEYBOARD), ii_)
-    ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+    # 1. pydirectinput release
+    try:
+        import pydirectinput
+        pydirectinput.FAILSAFE = False
+        pydirectinput.PAUSE = 0
+        pydirectinput.keyUp(k)
+    except Exception:
+        pass
+    # 2. DirectInput SendInput release
+    sc = SCANCODES.get(k, 0)
+    vk = VK_CODES.get(k, 0)
+    if sc or vk:
+        try:
+            extra = ctypes.c_ulong(0)
+            ii_ = Input_I()
+            ii_.ki = KeyBdInput(vk, sc, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0, ctypes.pointer(extra))
+            x = Input(ctypes.c_ulong(INPUT_KEYBOARD), ii_)
+            ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
+        except Exception:
+            pass
+        # 3. Hardware keybd_event keyup (chống kẹt phím 100%)
+        try:
+            ctypes.windll.user32.keybd_event(vk, sc, KEYEVENTF_KEYUP, 0)
+        except Exception:
+            pass
 
-def tap_key(key_char, duration=0.02):
-    """Taps a key with duration (default 20ms for fast responsive game input)."""
+def tap_key(key_char, duration=0.035):
+    """Taps a key with duration (default 35ms for guaranteed Roblox DirectInput registration)."""
     press_key(key_char)
     time.sleep(duration)
     release_key(key_char)
 
-def mouse_down():
-    """Presses and holds left mouse button down."""
+def tap_key_sequence(keys, press_duration=0.030, interval=0.015):
+    """Taps a list of keys sequentially with proper hold duration and inter-key delay."""
+    for k in keys:
+        press_key(k)
+        time.sleep(press_duration)
+        release_key(k)
+        if interval > 0:
+            time.sleep(interval)
+
+def mouse_down(x=None, y=None):
+    """
+    Presses and holds left mouse button down via SendInput (DirectInput).
+    Sets cursor position first if (x, y) provided.
+    """
+    if x is not None and y is not None:
+        try:
+            import win32api
+            win32api.SetCursorPos((int(x), int(y)))
+        except Exception:
+            pass
+    sent = False
     try:
         import pydirectinput
         pydirectinput.FAILSAFE = False
         pydirectinput.PAUSE = 0
-        pydirectinput.mouseDown(button='left')
+        if x is not None and y is not None:
+            pydirectinput.mouseDown(x=int(x), y=int(y), button='left')
+        else:
+            pydirectinput.mouseDown(button='left')
+        sent = True
     except Exception:
         pass
-    try:
-        import win32api
-        import win32con
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-    except Exception:
-        pass
+    if not sent:
+        try:
+            import win32api
+            import win32con
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        except Exception:
+            pass
 
-def mouse_up():
-    """Releases left mouse button."""
+def mouse_up(x=None, y=None):
+    """Releases left mouse button via SendInput."""
+    if x is not None and y is not None:
+        try:
+            import win32api
+            win32api.SetCursorPos((int(x), int(y)))
+        except Exception:
+            pass
+    sent = False
     try:
         import pydirectinput
         pydirectinput.FAILSAFE = False
         pydirectinput.PAUSE = 0
-        pydirectinput.mouseUp(button='left')
+        if x is not None and y is not None:
+            pydirectinput.mouseUp(x=int(x), y=int(y), button='left')
+        else:
+            pydirectinput.mouseUp(button='left')
+        sent = True
     except Exception:
         pass
-    try:
-        import win32api
-        import win32con
-        win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-    except Exception:
-        pass
+    if not sent:
+        try:
+            import win32api
+            import win32con
+            win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        except Exception:
+            pass
 
-def hold_left_mouse(duration=1.8, stop_check=None):
+def hold_left_mouse(duration=0.8, stop_check=None, x=None, y=None):
     """
     Simulates firmly holding left mouse button down for charging rod (x5 damage),
-    then releases it smoothly.
+    then releases it smoothly. Dispatches DirectInput events directly to Roblox.
     """
-    mouse_down()
+    if x is not None and y is not None:
+        try:
+            import pydirectinput
+            pydirectinput.FAILSAFE = False
+            pydirectinput.PAUSE = 0
+            pydirectinput.moveTo(int(x), int(y))
+        except Exception:
+            pass
+        try:
+            import win32api
+            win32api.SetCursorPos((int(x), int(y)))
+        except Exception:
+            pass
+        time.sleep(0.02)
+
+    mouse_down(x, y)
     t_end = time.time() + max(0.1, float(duration))
     while time.time() < t_end:
         if stop_check and stop_check():
             break
         time.sleep(0.02)
-    mouse_up()
+    mouse_up(x, y)
 
 
 # ============================================================

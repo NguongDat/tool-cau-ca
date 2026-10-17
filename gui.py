@@ -213,7 +213,7 @@ class FishingBotGUI(ctk.CTk):
         # Đứng yên
         self.chk_disable_wasd = ctk.CTkCheckBox(
             cast_box,
-            text="🛑 GIỮ NHÂN VẬT ĐỨNG YÊN (Tắt di chuyển W/A/D)",
+            text="🛑 KHÓA VỊ TRÍ ĐỨNG YÊN (Triệt tiêu quán tính, không trôi khi bấm W/A/D)",
             font=ctk.CTkFont(size=11, weight="bold"), text_color="#00E5FF",
             command=self.on_settings_change
         )
