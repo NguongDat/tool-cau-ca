@@ -48,7 +48,7 @@ class FishingBotGUI(ctk.CTk):
 
         ctk.CTkLabel(
             header_frame,
-            text="Auto W/A/D | Skills Z-X-C-V | F6 Bật/Tắt | F7 Quăng Cần",
+            text="Auto W/A/D | Skills Z-X-C-V | Phím tắt: F6 Bật/Tắt",
             font=ctk.CTkFont(size=12),
             text_color="#8892B0"
         ).pack(side="right", padx=16, pady=12)
@@ -170,7 +170,7 @@ class FishingBotGUI(ctk.CTk):
 
         self.btn_cast_once = ctk.CTkButton(
             cast_box,
-            text="⚡ Giữ Chuột Quăng Cần Ngay (F7)",
+            text="⚡ Giữ Chuột Quăng Cần (Thủ Công)",
             font=ctk.CTkFont(size=12, weight="bold"),
             fg_color="#0288D1", hover_color="#01579B",
             height=32,
@@ -332,9 +332,8 @@ class FishingBotGUI(ctk.CTk):
             "   - Bạn bè KHÔNG CẦN cài Python hay bất kỳ phần mềm nào khác!\n\n"
             "2. CÁCH 2 (Chạy nhanh qua file Run Tool):\n"
             "   - Gửi toàn bộ thư mục 'tool cau ca', bạn bè chỉ cần bấm đúp file 'run_tool.bat'.\n\n"
-            "TỔNG HỢP CÁC PHÍM TẮT ĐIỀU KHIỂN:\n"
-            "   • [ F6 ] : Bật / Tắt Tự Động Câu Cá (Tự giữ cần & tung chiêu Z-X-C-V)\n"
-            "   • [ F7 ] : Ném Cần & Sạc Lực Ngay (Sạc đạt x5 DAMAGE)\n"
+            "TỔNG HỢP PHÍM TẮT ĐIỀU KHIỂN:\n"
+            "   • [ F6 ] : Bật / Tắt Tự Động Câu Cá (Tự giữ cần, xả chiêu Z-X-C-V & tự quăng cần)\n"
         )
         ctk.CTkLabel(
             box, text=info_text,
@@ -353,7 +352,6 @@ class FishingBotGUI(ctk.CTk):
     def setup_hotkeys(self):
         try:
             keyboard.add_hotkey('F6', lambda: threading.Thread(target=self.toggle_bot, daemon=True).start(), suppress=True)
-            keyboard.add_hotkey('F7', lambda: threading.Thread(target=self.trigger_cast, daemon=True).start(), suppress=True)
         except Exception as e:
             print("Hotkey setup warning:", e)
 

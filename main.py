@@ -14,8 +14,7 @@ def main():
     print("==================================================")
     print("  Roblox Fishing Master Auto Pro Starting...     ")
     print("  Hotkeys:                                       ")
-    print("    [ F6 ] : Bật / Tắt Tự Động Câu               ")
-    print("    [ F7 ] : Ném Cần & Sạc Lực (Auto Cast)       ")
+    print("    [ F6 ] : Bật / Tắt Tự Động Câu (Auto Fishing) ")
     print("==================================================")
     
     app = FishingBotGUI()

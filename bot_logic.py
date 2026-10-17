@@ -87,7 +87,7 @@ class FishingBot:
         self.is_running = True
         self.stop_event.clear()
         # Chi reset last_cast_time neu chua co cast nao (= 0.0)
-        # Neu trigger_cast (F7) da goi cast truoc do thi giu nguyen last_cast_time
+        # Neu trigger_cast da goi cast truoc do thi giu nguyen last_cast_time
         if self.last_cast_time == 0.0:
             self.last_cast_time = time.time()
         self.thread = threading.Thread(target=self._loop, daemon=True)

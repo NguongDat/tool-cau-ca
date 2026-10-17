@@ -29,8 +29,7 @@ Công cụ tự động câu cá chuyên nghiệp cho tựa game **Fishing Maste
 ## 🎮 Hướng Dẫn Sử Dụng & Phím Tắt
 
 ### Phím tắt nhanh:
-- **`F6`**: **Bật / Tắt Auto Câu Cá** (Tự bấm W/A/D và xả skill Z-X-C-V).
-- **`F7`**: **Ném Cần & Sạc Lực Ngay** (Giữ chuột sạc lực x5 Damage).
+- **`F6`**: **Bật / Tắt Tự Động Câu Cá** (Tự sạc lực ném cần, bấm W/A/D và xả skill Z-X-C-V).
 
 ---
 
