@@ -34,6 +34,7 @@ class RobloxVision:
         self.roblox_hwnd = None
         self.cached_rect = None
         self.last_rect_check = 0.0
+        self.active_scale = 1.0
 
     def _ensure_sct(self):
         """Thread-safe and fault-tolerant mss instance getter with auto-recreation."""
@@ -407,20 +408,32 @@ class RobloxVision:
         best_score = 0.0
         best_loc = None
         best_size = (74, 74)
+        matched_scale = 1.0
 
-        # 1. Quét nhanh tỷ lệ chuẩn 1.0x
-        for k in ['W', 'A', 'D']:
-            if k in self.primary_key_templates:
-                tpl = self.primary_key_templates[k]['full']
-                th, tw = tpl.shape[:2]
-                if th < roi_gray.shape[0] and tw < roi_gray.shape[1]:
-                    res = cv2.matchTemplate(roi_gray, tpl, cv2.TM_CCOEFF_NORMED)
-                    _, max_val, _, max_loc = cv2.minMaxLoc(res)
-                    if max_val > best_score:
-                        best_score = max_val
-                        best_k = k
-                        best_loc = max_loc
-                        best_size = (tw, th)
+        # 1. Ưu tiên quét tỷ lệ đang hoạt động (active_scale) để đạt tốc độ tức thì (~15ms)
+        active_dict = None
+        if self.active_scale == 1.0:
+            active_dict = self.primary_key_templates
+        else:
+            for s, s_dict in self.scaled_key_templates:
+                if s == self.active_scale:
+                    active_dict = s_dict
+                    break
+
+        if active_dict:
+            for k in ['W', 'A', 'D']:
+                if k in active_dict:
+                    tpl = active_dict[k]['full']
+                    th, tw = tpl.shape[:2]
+                    if th < roi_gray.shape[0] and tw < roi_gray.shape[1]:
+                        res = cv2.matchTemplate(roi_gray, tpl, cv2.TM_CCOEFF_NORMED)
+                        _, max_val, _, max_loc = cv2.minMaxLoc(res)
+                        if max_val > best_score:
+                            best_score = max_val
+                            best_k = k
+                            best_loc = max_loc
+                            best_size = (tw, th)
+                            matched_scale = self.active_scale
 
         if best_score >= 0.65 and best_k is not None:
             abs_x = x1 + best_loc[0] + best_size[0] // 2
@@ -429,11 +442,14 @@ class RobloxVision:
                 "key": best_k,
                 "confidence": float(best_score),
                 "pos": (abs_x, abs_y),
-                "method": "direct_1x"
+                "method": f"scale_{matched_scale:.2f}"
             }
 
-        # 2. Quét đa tỷ lệ cho các màn hình có độ phân giải/thu phóng khác nhau
-        for s, scale_dict in self.scaled_key_templates:
+        # 2. Nếu tỷ lệ hiện tại chưa khớp, quét nhanh qua các tỷ lệ còn lại
+        all_scales = [(1.0, self.primary_key_templates)] + self.scaled_key_templates
+        for s, scale_dict in all_scales:
+            if s == self.active_scale:
+                continue
             for k in ['W', 'A', 'D']:
                 if k in scale_dict:
                     tpl = scale_dict[k]['full']
@@ -446,18 +462,20 @@ class RobloxVision:
                             best_k = k
                             best_loc = max_loc
                             best_size = (tw, th)
+                            matched_scale = s
             if best_score >= 0.65:
                 break
 
-        # Ngưỡng 0.58 vừa đủ nhạy để bắt kịp mọi animation mà không bị bắt nhầm icon kỹ năng
+        # Ngưỡng 0.58 vừa đủ nhạy để bắt kịp ngay từ khung hình đầu tiên xuất hiện chữ
         if best_score >= 0.58 and best_k is not None:
+            self.active_scale = matched_scale
             abs_x = x1 + best_loc[0] + best_size[0] // 2
             abs_y = y1 + best_loc[1] + best_size[1] // 2
             return {
                 "key": best_k,
                 "confidence": float(best_score),
                 "pos": (abs_x, abs_y),
-                "method": "scaled_keycap"
+                "method": f"scale_{matched_scale:.2f}"
             }
 
         return None

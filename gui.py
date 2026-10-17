@@ -136,11 +136,11 @@ class FishingBotGUI(ctk.CTk):
         # Cài đặt độ trễ quan sát phím W/A/D: Nhìn kỹ rồi mới bấm
         wad_delay_row = ctk.CTkFrame(key_frame, fg_color="transparent")
         wad_delay_row.pack(fill="x", padx=8, pady=(0, 6))
-        ctk.CTkLabel(wad_delay_row, text="⏱ Độ trễ nhìn W/A/D:", font=ctk.CTkFont(size=11)).pack(side="left")
+        ctk.CTkLabel(wad_delay_row, text="⏱ Độ trễ bấm W/A/D:", font=ctk.CTkFont(size=11)).pack(side="left")
         self.entry_qte_delay = ctk.CTkEntry(wad_delay_row, width=44, height=24, font=ctk.CTkFont(size=11, weight="bold"))
-        self.entry_qte_delay.insert(0, str(self.bot.config.get("qte_reaction_delay_ms", 120)))
+        self.entry_qte_delay.insert(0, str(self.bot.config.get("qte_reaction_delay_ms", 25)))
         self.entry_qte_delay.pack(side="left", padx=4)
-        ctk.CTkLabel(wad_delay_row, text="ms (Nhìn kỹ rồi hãy bấm)", font=ctk.CTkFont(size=10), text_color="#8892B0").pack(side="left")
+        ctk.CTkLabel(wad_delay_row, text="ms (Bấm sớm chống miss)", font=ctk.CTkFont(size=10), text_color="#8892B0").pack(side="left")
 
         # Thanh tension
         tension_frame = ctk.CTkFrame(status_box, fg_color="#0D0F18", corner_radius=8)

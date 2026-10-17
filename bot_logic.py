@@ -13,8 +13,8 @@ DEFAULT_CONFIG = {
     "charge_time_seconds": 1.2,
     "recast_delay_after_catch": 0.5,
     "recast_timeout_seconds": 6.0,
-    "qte_reaction_delay_ms": 80,
-    "qte_press_duration_ms": 65,
+    "qte_reaction_delay_ms": 25,
+    "qte_press_duration_ms": 45,
     "key_mode": "hold",
     "tap_delay_ms": 30,
     "tension_min_safe": 25.0,
@@ -380,11 +380,11 @@ class FishingBot:
 
             # Thời gian phím đã hiển thị ổn định
             visible_duration = now - self.current_prompt_first_seen
-            reaction_delay = float(self.config.get("qte_reaction_delay_ms", 80)) / 1000.0
+            reaction_delay = float(self.config.get("qte_reaction_delay_ms", 25)) / 1000.0
 
-            # "Nhìn đã rồi hãy bấm": Chỉ bấm khi đã quan sát đủ thời gian và CHƯA từng bấm
+            # Bấm ngay khi đã xác nhận ổn định (25ms: phản ứng cực nhanh, không để chữ gần mất mới bấm)
             if not self.current_prompt_pressed and visible_duration >= reaction_delay:
-                press_duration = float(self.config.get("qte_press_duration_ms", 65)) / 1000.0
+                press_duration = float(self.config.get("qte_press_duration_ms", 45)) / 1000.0
                 di.tap_key(req_key, duration=press_duration)
 
                 # Đánh dấu ĐÃ BẤM cho phím này -> Tuyệt đối không bấm lặp lại (tránh spam gây miss)
