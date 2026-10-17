@@ -209,7 +209,7 @@ class FishingBotGUI(ctk.CTk):
 
         ctk.CTkLabel(cast_cfg_row, text="Đứng yên sau câu:", font=ctk.CTkFont(size=11)).pack(side="left")
         self.entry_recast_delay = ctk.CTkEntry(cast_cfg_row, width=42, height=24, font=ctk.CTkFont(size=11, weight="bold"))
-        self.entry_recast_delay.insert(0, str(self.bot.config.get("recast_delay_after_catch", 1.2)))
+        self.entry_recast_delay.insert(0, str(self.bot.config.get("recast_delay_after_catch", 0.5)))
         self.entry_recast_delay.pack(side="left", padx=3)
         ctk.CTkLabel(cast_cfg_row, text="s", font=ctk.CTkFont(size=10), text_color="#8892B0").pack(side="left", padx=(0, 6))
 

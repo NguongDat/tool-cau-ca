@@ -1,7 +1,7 @@
 {
     "auto_cast": true,
     "charge_time_seconds": 0.7,
-    "recast_delay_after_catch": 1.2,
+    "recast_delay_after_catch": 0.5,
     "recast_timeout_seconds": 6.0,
     "qte_reaction_delay_ms": 80,
     "qte_press_duration_ms": 65,
@@ -12,19 +12,19 @@
     "skills": {
         "Z": {
             "enabled": true,
-            "cooldown": 3.5
+            "cooldown": 0.2
         },
         "X": {
             "enabled": true,
-            "cooldown": 2.5
+            "cooldown": 0.1
         },
         "C": {
             "enabled": true,
-            "cooldown": 2.0
+            "cooldown": 0.1
         },
         "V": {
             "enabled": true,
-            "cooldown": 4.3
+            "cooldown": 0.2
         }
     },
     "skill_order": [

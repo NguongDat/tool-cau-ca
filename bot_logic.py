@@ -11,7 +11,7 @@ CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
 DEFAULT_CONFIG = {
     "auto_cast": True,
     "charge_time_seconds": 1.2,
-    "recast_delay_after_catch": 1.2,
+    "recast_delay_after_catch": 0.5,
     "recast_timeout_seconds": 6.0,
     "qte_reaction_delay_ms": 80,
     "qte_press_duration_ms": 65,
@@ -446,7 +446,7 @@ class FishingBot:
 
         # 2. Đứng yên sau khi câu cá lên xong xuôi, sau đó mới quăng cần xuống tiếp
         if self.config.get("auto_cast", True) and not self.is_casting:
-            stand_delay = float(self.config.get("recast_delay_after_catch", 1.2))
+            stand_delay = float(self.config.get("recast_delay_after_catch", 0.5))
             threading.Thread(
                 target=self.trigger_auto_cast,
                 args=(stand_delay,),
