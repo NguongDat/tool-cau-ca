@@ -318,140 +318,82 @@ class RobloxVision:
 
     def detect_cyan_arrow(self, frame_bgr):
         """
-        Phát hiện mũi tên cyan chỉ hướng của minigame:
+        Phát hiện mũi tên chỉ hướng (Cyan, Vàng, Xanh lá) của minigame:
         - Mũi tên hướng LÊN -> 'W'
         - Mũi tên hướng TRÁI -> 'A'
         - Mũi tên hướng PHẢI -> 'D'
+        - Mũi tên hướng XUỐNG -> 'S'
         """
         if frame_bgr is None:
             return None
         h, w = frame_bgr.shape[:2]
-        # Minigame QTE nằm ở khu vực giữa màn hình (tránh thanh công cụ, menu và vùng nước bao quanh)
-        roi_y1, roi_y2 = int(h * 0.15), int(h * 0.85)
-        roi_x1, roi_x2 = int(w * 0.12), int(w * 0.88)
+        # Vùng minigame: từ 16% đến 88% chiều cao (tránh thanh cá ở 0-15% và hotbar ở 90-100%)
+        roi_y1, roi_y2 = int(h * 0.16), int(h * 0.88)
+        roi_x1, roi_x2 = int(w * 0.08), int(w * 0.92)
         roi = frame_bgr[roi_y1:roi_y2, roi_x1:roi_x2]
         if roi.shape[0] < 30 or roi.shape[1] < 30:
             return None
 
         b, g, r = cv2.split(roi)
-        # Mũi tên cyan hoặc vàng / sáng
-        cyan_mask = (b > 135) & (g > 135) & (r < 155)
-        yellow_mask = (r > 160) & (g > 160) & (b < 120)
-        arrow_mask = (cyan_mask | yellow_mask).astype(np.uint8)
+        # 1. Mũi tên Cyan / Xanh biển: B và G cao, R thấp
+        cyan_mask = (b > 130) & (g > 130) & (r < 165)
+        # 2. Mũi tên Vàng / Cam: R và G cao, B thấp
+        yellow_mask = (r > 150) & (g > 130) & (b < 130)
+        # 3. Mũi tên Xanh lá / Lime: G cao hơn B và R
+        green_mask = (g > 150) & (g > 1.15 * b) & (b < 150)
+
+        arrow_mask = (cyan_mask | yellow_mask | green_mask).astype(np.uint8)
 
         cnts, _ = cv2.findContours(arrow_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        for c in cnts:
-            area = cv2.contourArea(c)
-            # Giới hạn kích thước mũi tên thực tế (120px - 4000px)
-            if 120 <= area <= 4000:
-                bx, by, bw, bh = cv2.boundingRect(c)
-                if 14 <= bw <= 95 and 14 <= bh <= 95:
-                    solidity = area / float(bw * bh)
-                    if 0.25 <= solidity <= 0.88:
-                        pts = c.reshape(-1, 2)
-                        top_pt = pts[pts[:, 1].argmin()]
-                        left_pt = pts[pts[:, 0].argmin()]
-                        right_pt = pts[pts[:, 0].argmax()]
-                        bottom_pt = pts[pts[:, 1].argmax()]
-                        cx = bx + bw / 2
-                        abs_x = roi_x1 + int(cx)
-                        abs_y = roi_y1 + int(by + bh / 2)
-                        if bh > bw * 1.05 and top_pt[1] < by + bh * 0.28:
-                            return {"key": "W", "confidence": 0.96, "pos": (abs_x, abs_y), "method": "arrow_up"}
-                        elif left_pt[0] < bx + bw * 0.28 and bw > bh * 1.05:
-                            return {"key": "A", "confidence": 0.96, "pos": (abs_x, abs_y), "method": "arrow_left"}
-                        elif right_pt[0] > bx + bw * 0.72 and bw > bh * 1.05:
-                            return {"key": "D", "confidence": 0.96, "pos": (abs_x, abs_y), "method": "arrow_right"}
-                        elif bh > bw * 1.05 and bottom_pt[1] > by + bh * 0.72:
-                            return {"key": "S", "confidence": 0.96, "pos": (abs_x, abs_y), "method": "arrow_down"}
-        return None
-
-    def detect_qte_badge(self, frame_bgr):
-        """
-        Nhận diện chính xác 100% huy hiệu QTE tròn màu trắng chứa chữ W/A/D/S của Roblox Fishing Master.
-        Phân tích hình học trực tiếp các nét chữ cái cắt rỗng bên trong huy hiệu.
-        """
-        if frame_bgr is None:
-            return None
-        h, w = frame_bgr.shape[:2]
-        # Vùng xuất hiện QTE trung tâm (loại bỏ menu góc trên, chat góc dưới, hotbar)
-        y1, y2 = int(h * 0.15), int(h * 0.85)
-        x1, x2 = int(w * 0.15), int(w * 0.85)
-        roi = frame_bgr[y1:y2, x1:x2]
-        if roi.shape[0] < 40 or roi.shape[1] < 40:
-            return None
-
-        gray = cv2.cvtColor(roi, cv2.COLOR_BGR2GRAY)
-        _, th = cv2.threshold(gray, 185, 255, cv2.THRESH_BINARY)
-        cnts, _ = cv2.findContours(th, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-
         candidates = []
         for c in cnts:
             area = cv2.contourArea(c)
-            if 700 <= area <= 7000:
+            # Kích thước mũi tên thực tế (100px - 3500px)
+            if 100 <= area <= 3500:
                 bx, by, bw, bh = cv2.boundingRect(c)
                 aspect = bw / float(bh)
-                peri = cv2.arcLength(c, True)
-                circ = (4 * np.pi * area / (peri * peri)) if peri > 0 else 0
-                # Huy hiệu QTE là hình tròn chuẩn (aspect gần 1, độ tròn circ >= 0.40)
-                if 0.70 <= aspect <= 1.40 and 30 <= bw <= 110 and 30 <= bh <= 110 and circ >= 0.40:
-                    crop = gray[by:by+bh, bx:bx+bw]
-                    badge_mask = (crop > 180).astype(np.uint8)
-                    closed = cv2.morphologyEx(badge_mask, cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8))
-                    letter_mask = ((crop < 165) & (closed > 0)).astype(np.uint8)
-                    l_cnts, _ = cv2.findContours(letter_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    if not l_cnts:
-                        continue
-                    best_lc = max(l_cnts, key=cv2.contourArea)
-                    l_area = cv2.contourArea(best_lc)
-                    if 180 <= l_area <= 4000:
-                        lbx, lby, lbw, lbh = cv2.boundingRect(best_lc)
-                        letter_crop = letter_mask[lby:lby+lbh, lbx:lbx+lbw]
+                # Tỷ lệ mũi tên chuẩn (không phải thanh dài, không phải vạch mỏng)
+                if 0.55 <= aspect <= 1.85 and 18 <= bw <= 90 and 18 <= bh <= 90:
+                    solidity = area / float(bw * bh)
+                    if 0.22 <= solidity <= 0.82:
+                        pts = c.reshape(-1, 2)
+                        top_pt = pts[pts[:, 1].argmin()]
+                        bottom_pt = pts[pts[:, 1].argmax()]
+                        left_pt = pts[pts[:, 0].argmin()]
+                        right_pt = pts[pts[:, 0].argmax()]
+                        abs_x = roi_x1 + bx + bw // 2
+                        abs_y = roi_y1 + by + bh // 2
 
-                        top_slice = letter_crop[:int(lbh * 0.35), :]
-                        top_proj = top_slice.sum(axis=0) > 0
-                        transitions_top = np.diff(top_proj.astype(int))
-                        peaks_top = int(np.sum(transitions_top > 0))
-
-                        left_cols = letter_crop[:, :int(lbw * 0.30)]
-                        left_fill = left_cols.mean(axis=1)
-                        is_left_straight = bool((left_fill > 0.6).mean() > 0.7)
-
-                        key = None
-                        if peaks_top >= 2 or lbw / float(lbh) > 1.15:
-                            key = 'W'
-                        elif is_left_straight:
-                            key = 'D'
-                        else:
-                            key = 'A'
-
-                        abs_x = x1 + bx + bw // 2
-                        abs_y = y1 + by + bh // 2
-                        candidates.append((l_area, key, (abs_x, abs_y)))
+                        # Mũi tên LÊN (W): Đỉnh nhọn ở trên
+                        if bh > bw * 1.04 and top_pt[1] <= by + bh * 0.28:
+                            candidates.append((area, "W", (abs_x, abs_y), "arrow_up"))
+                        # Mũi tên TRÁI (A): Đỉnh nhọn ở bên trái
+                        elif bw > bh * 1.04 and left_pt[0] <= bx + bw * 0.28:
+                            candidates.append((area, "A", (abs_x, abs_y), "arrow_left"))
+                        # Mũi tên PHẢI (D): Đỉnh nhọn ở bên phải
+                        elif bw > bh * 1.04 and right_pt[0] >= bx + bw * 0.72:
+                            candidates.append((area, "D", (abs_x, abs_y), "arrow_right"))
+                        # Mũi tên XUỐNG (S): Đỉnh nhọn ở dưới
+                        elif bh > bw * 1.04 and bottom_pt[1] >= by + bh * 0.72:
+                            candidates.append((area, "S", (abs_x, abs_y), "arrow_down"))
 
         if candidates:
             candidates.sort(key=lambda x: x[0], reverse=True)
             best = candidates[0]
-            return {'key': best[1], 'confidence': 0.98, 'pos': best[2], 'method': 'qte_badge_detector'}
+            return {"key": best[1], "confidence": 0.98, "pos": best[2], "method": best[3]}
         return None
 
     def detect_key_prompt(self, frame_bgr):
         """
-        Nhận diện phím W/A/D xuất hiện ngẫu nhiên trên toàn màn hình với độ chính xác tuyệt đối (>98%):
-        1. Ưu tiên kiểm tra HUY HIỆU QTE W/A/D thực tế của Roblox Fishing Master.
-        2. Kiểm tra MŨI TÊN chỉ hướng.
-        3. Quét đa tỷ lệ Keycap dự phòng.
+        Nhận diện phím W/A/D xuất hiện ngẫu nhiên trên toàn màn hình với độ chính xác cao:
+        1. Ưu tiên kiểm tra MŨI TÊN CHỈ HƯỚNG (Cyan, Vàng, Xanh lá).
+        2. Quét đa tỷ lệ Keycap dự phòng (coarse-to-fine multi-scale).
         Returns: dict with 'key', 'confidence', 'pos', 'method' or None
         """
         if frame_bgr is None:
             return None
 
-        # ── TẦNG 1: ƯU TIÊN HUY HIỆU QTE W/A/D CHUẨN CỦA FISHING MASTER (ĐỘ CHÍNH XÁC 98%) ──
-        badge_res = self.detect_qte_badge(frame_bgr)
-        if badge_res is not None:
-            return badge_res
-
-        # ── TẦNG 2: MŨI TÊN CHỈ HƯỚNG ──
+        # ── TẦNG 1: MŨI TÊN CHỈ HƯỚNG CỦA FISHING MASTER (ĐỘ CHÍNH XÁC CAO NHẤT) ──
         arrow_res = self.detect_cyan_arrow(frame_bgr)
         if arrow_res is not None:
             return arrow_res
