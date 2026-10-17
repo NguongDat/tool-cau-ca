@@ -12,7 +12,9 @@ DEFAULT_CONFIG = {
     "auto_cast": True,
     "charge_time_seconds": 1.2,
     "recast_delay_after_catch": 0.1,
-    "recast_timeout_seconds": 3.0,
+    "recast_timeout_seconds": 6.0,
+    "qte_reaction_delay_ms": 120,
+    "qte_press_duration_ms": 40,
     "key_mode": "hold",
     "tap_delay_ms": 30,
     "tension_min_safe": 25.0,
@@ -57,9 +59,10 @@ class FishingBot:
         self.last_cast_time = 0.0
         self.last_minigame_seen = 0.0
         self.target_rect = None
-        self.last_pressed_qte_key = None
-        self.last_pressed_qte_pos = None
-        self.last_pressed_qte_time = 0.0
+        self.current_prompt_key = None
+        self.current_prompt_pos = None
+        self.current_prompt_first_seen = 0.0
+        self.current_prompt_pressed = False
 
     # ── Config ──────────────────────────────────────────────────
     def load_config(self):
@@ -361,36 +364,49 @@ class FishingBot:
 
         now = time.time()
 
-        # ── 1. ƯU TIÊN SỐ 1: BẤM PHÍM W/A/D NGAY LẬP TỨC ĐỂ KHÔNG MISS ──
+        # ── 1. QUẢN LÝ PHÍM W/A/D: "NHÌN KỸ RỒI MỚI BẤM" - KHÔNG BẤM QUÁ VỘI / KHÔNG SPAM ──
         if key_info and key_info.get("key"):
             req_key = key_info["key"].lower()
             cur_pos = key_info.get("pos")
             self.active_key = req_key.upper()
 
-            is_new_prompt = False
-            if req_key != self.last_pressed_qte_key:
-                is_new_prompt = True
-            elif cur_pos and self.last_pressed_qte_pos:
-                dist = ((cur_pos[0] - self.last_pressed_qte_pos[0]) ** 2 + (cur_pos[1] - self.last_pressed_qte_pos[1]) ** 2) ** 0.5
-                if dist > 25:
-                    is_new_prompt = True
+            is_same_prompt = False
+            if self.current_prompt_key == req_key:
+                if cur_pos and self.current_prompt_pos:
+                    dist = ((cur_pos[0] - self.current_prompt_pos[0]) ** 2 + (cur_pos[1] - self.current_prompt_pos[1]) ** 2) ** 0.5
+                    if dist <= 30:
+                        is_same_prompt = True
+                else:
+                    is_same_prompt = True
 
-            time_since_press = now - self.last_pressed_qte_time
+            if not is_same_prompt:
+                # Phát hiện mũi tên/prompt MỚI: Bắt đầu quan sát ("nhìn")
+                self.current_prompt_key = req_key
+                self.current_prompt_pos = cur_pos
+                self.current_prompt_first_seen = now
+                self.current_prompt_pressed = False
 
-            # Bấm ngay khi có prompt mới, hoặc lặp lại sau 80ms nếu prompt vẫn còn
-            if is_new_prompt or time_since_press >= 0.08:
+            # Tính thời gian mũi tên đã hiển thị ổn định
+            visible_duration = now - self.current_prompt_first_seen
+            reaction_delay = float(self.config.get("qte_reaction_delay_ms", 120)) / 1000.0
+
+            # "Nhìn đã rồi hãy bấm": Chỉ khi mũi tên đã xuất hiện ổn định đủ độ trễ và CHƯA từng bấm
+            if not self.current_prompt_pressed and visible_duration >= reaction_delay:
+                press_duration = float(self.config.get("qte_press_duration_ms", 40)) / 1000.0
                 if is_fg:
-                    di.tap_key(req_key, duration=0.035)
+                    di.tap_key(req_key, duration=press_duration)
                 elif self.vision.roblox_hwnd:
-                    di.post_key_to_hwnd(self.vision.roblox_hwnd, req_key, duration=0.035)
+                    di.post_key_to_hwnd(self.vision.roblox_hwnd, req_key, duration=press_duration)
 
-                self.last_pressed_qte_key = req_key
-                self.last_pressed_qte_pos = cur_pos
-                self.last_pressed_qte_time = now
+                # Đánh dấu ĐÃ BẤM cho mũi tên này -> Tuyệt đối không bấm lặp lại (tránh spam làm game phạt miss)
+                self.current_prompt_pressed = True
         else:
+            # Mũi tên đã biến mất khỏi màn hình -> Reset để sẵn sàng cho mũi tên tiếp theo
             self.active_key = None
-            self.last_pressed_qte_key = None
-            self.last_pressed_qte_pos = None
+            self.current_prompt_key = None
+            self.current_prompt_pos = None
+            self.current_prompt_first_seen = 0.0
+            self.current_prompt_pressed = False
 
         # ── 2. XẢ SKILL Z-X-C-V (KHÔNG LÀM CHẬM PHÍM W/A/D) ──
         ignore_tension = self.config.get("skills_ignore_tension", True)

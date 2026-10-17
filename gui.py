@@ -131,7 +131,16 @@ class FishingBotGUI(ctk.CTk):
         key_frame.pack(fill="x", padx=12, pady=6)
         ctk.CTkLabel(key_frame, text="Phím W/A/D Đang Bấm:", font=ctk.CTkFont(size=11)).pack(anchor="w", padx=10, pady=(4, 0))
         self.lbl_active_key = ctk.CTkLabel(key_frame, text="[ - ]", font=ctk.CTkFont(size=30, weight="bold"), text_color="#00E5FF")
-        self.lbl_active_key.pack(pady=(0, 4))
+        self.lbl_active_key.pack(pady=(0, 2))
+
+        # Cài đặt độ trễ quan sát phím W/A/D: Nhìn kỹ rồi mới bấm
+        wad_delay_row = ctk.CTkFrame(key_frame, fg_color="transparent")
+        wad_delay_row.pack(fill="x", padx=8, pady=(0, 6))
+        ctk.CTkLabel(wad_delay_row, text="⏱ Độ trễ nhìn W/A/D:", font=ctk.CTkFont(size=11)).pack(side="left")
+        self.entry_qte_delay = ctk.CTkEntry(wad_delay_row, width=44, height=24, font=ctk.CTkFont(size=11, weight="bold"))
+        self.entry_qte_delay.insert(0, str(self.bot.config.get("qte_reaction_delay_ms", 120)))
+        self.entry_qte_delay.pack(side="left", padx=4)
+        ctk.CTkLabel(wad_delay_row, text="ms (Nhìn kỹ rồi hãy bấm)", font=ctk.CTkFont(size=10), text_color="#8892B0").pack(side="left")
 
         # Thanh tension
         tension_frame = ctk.CTkFrame(status_box, fg_color="#0D0F18", corner_radius=8)
@@ -408,6 +417,11 @@ class FishingBotGUI(ctk.CTk):
         try:
             if hasattr(self, "entry_recast_delay"):
                 self.bot.config["recast_delay_after_catch"] = float(self.entry_recast_delay.get())
+        except Exception:
+            pass
+        try:
+            if hasattr(self, "entry_qte_delay"):
+                self.bot.config["qte_reaction_delay_ms"] = int(self.entry_qte_delay.get())
         except Exception:
             pass
         try:

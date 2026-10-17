@@ -3,6 +3,8 @@
     "charge_time_seconds": 0.7,
     "recast_delay_after_catch": 0.1,
     "recast_timeout_seconds": 6.0,
+    "qte_reaction_delay_ms": 120,
+    "qte_press_duration_ms": 40,
     "key_mode": "hold",
     "tap_delay_ms": 30,
     "tension_min_safe": 25.0,
