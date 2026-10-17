@@ -118,7 +118,7 @@ def press_key(key_char):
         try:
             extra = ctypes.c_ulong(0)
             ii_ = Input_I()
-            ii_.ki = KeyBdInput(vk, sc, KEYEVENTF_SCANCODE, 0, ctypes.pointer(extra))
+            ii_.ki = KeyBdInput(0, sc, KEYEVENTF_SCANCODE, 0, ctypes.pointer(extra))
             x = Input(ctypes.c_ulong(INPUT_KEYBOARD), ii_)
             ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
         except Exception:
@@ -142,7 +142,7 @@ def release_key(key_char):
         try:
             extra = ctypes.c_ulong(0)
             ii_ = Input_I()
-            ii_.ki = KeyBdInput(vk, sc, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0, ctypes.pointer(extra))
+            ii_.ki = KeyBdInput(0, sc, KEYEVENTF_SCANCODE | KEYEVENTF_KEYUP, 0, ctypes.pointer(extra))
             x = Input(ctypes.c_ulong(INPUT_KEYBOARD), ii_)
             ctypes.windll.user32.SendInput(1, ctypes.pointer(x), ctypes.sizeof(x))
         except Exception:

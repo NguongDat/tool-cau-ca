@@ -194,53 +194,24 @@ class FishingBot:
 
     def _do_cast(self):
         charge_sec = max(0.1, float(self.config.get("charge_time_seconds", 1.2)))
+        # 1. Luôn kích hoạt Roblox lên foreground để chắc chắn nhận lệnh chuột/phím
+        if not self._is_roblox_foreground():
+            self.vision.activate_roblox()
+            time.sleep(0.06)
+
+        coords = self.vision.get_safe_casting_coords(self.target_rect)
+        cx, cy = coords if coords else (None, None)
+
+        # 2. Dùng di.hold_left_mouse (SendInput qua pydirectinput): Chuẩn DirectInput của Roblox
         try:
-            import win32api, win32con, win32gui
-            hwnd = self.vision.roblox_hwnd
-            is_fg = self._is_roblox_foreground()
-
-            if is_fg:
-                coords = self.vision.get_safe_casting_coords(self.target_rect)
-                if coords:
-                    try:
-                        win32api.SetCursorPos(coords)
-                    except Exception:
-                        pass
-                time.sleep(0.02)
-                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
-                t_end = time.time() + charge_sec
-                while time.time() < t_end:
-                    if self.stop_event.is_set():
-                        break
-                    time.sleep(0.02)
-                win32api.mouse_event(win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
-
-            elif hwnd and win32gui.IsWindow(hwnd):
-                try:
-                    rect = win32gui.GetWindowRect(hwnd)
-                    client_x = (rect[2] - rect[0]) // 2
-                    client_y = int((rect[3] - rect[1]) * 0.55)
-                except Exception:
-                    client_x, client_y = 400, 300
-                di.post_mouse_hold_to_hwnd(
-                    hwnd, client_x, client_y,
-                    duration=charge_sec,
-                    stop_check=lambda: self.stop_event.is_set()
-                )
-            else:
-                di.hold_left_mouse(
-                    duration=charge_sec,
-                    stop_check=lambda: self.stop_event.is_set()
-                )
-
-        except Exception:
-            try:
-                di.hold_left_mouse(
-                    duration=charge_sec,
-                    stop_check=lambda: self.stop_event.is_set()
-                )
-            except Exception:
-                pass  # finally trong trigger_auto_cast van chay
+            di.hold_left_mouse(
+                duration=charge_sec,
+                stop_check=lambda: self.stop_event.is_set(),
+                x=cx,
+                y=cy
+            )
+        except Exception as e:
+            print(f"[FishingBot] hold_left_mouse error: {e}")
 
     # ── WATCHDOG ─────────────────────────────────────────────────
     def _start_watchdog_recast(self):
@@ -252,19 +223,14 @@ class FishingBot:
         cast_time_snapshot = self.last_cast_time  # chup thoi diem cast hien tai
 
         def _watchdog():
-            timeout = float(self.config.get("recast_timeout_seconds", 3.0))
+            timeout = float(self.config.get("recast_timeout_seconds", 6.0))
             time.sleep(timeout)
-            # Chi recast neu:
-            # - Bot van chay
-            # - Khong co cast nao khac dang chay
-            # - Khong co cast moi nao xay ra sau khi watchdog duoc tao
-            #   (neu last_cast_time thay doi = da co recast roi)
             if (
                 self.is_running
                 and not self.stop_event.is_set()
                 and not self.is_casting
                 and self.last_cast_time == cast_time_snapshot
-                and self.current_state == "WAITING_BITE"
+                and self.current_state not in ("CASTING", "FISHING")
             ):
                 threading.Thread(
                     target=self.trigger_auto_cast,
@@ -315,13 +281,13 @@ class FishingBot:
         # Chay TRUOC tat ca moi thu, ke ca khi khong tim thay Roblox window.
         # Neu qua recast_timeout giay tu lan cast cuoi → quang lai ngay.
         # Day la bao ve cuoi cung, hoan toan doc lap voi detection.
-        recast_timeout = float(self.config.get("recast_timeout_seconds", 3.0))
+        recast_timeout = float(self.config.get("recast_timeout_seconds", 6.0))
         if (
             self.config.get("auto_cast", True)
             and self.is_running
             and not self.is_casting
             and time.time() - self.last_cast_time > recast_timeout
-            and self.current_state == "WAITING_BITE"
+            and self.current_state not in ("CASTING", "FISHING")
         ):
             threading.Thread(
                 target=self.trigger_auto_cast,
@@ -457,19 +423,18 @@ class FishingBot:
         caught_notification = self.vision.detect_caught_notification(frame)
 
         if self.current_state == "FISHING":
-            # Minigame vua ket thuc - debounce 250ms
-            if time.time() - self.last_minigame_seen >= 0.25:
-                if self.is_running:  # Guard: khong recast neu bot da dung
+            # Minigame vua ket thuc - debounce 200ms
+            if time.time() - self.last_minigame_seen >= 0.20:
+                if self.is_running and not self.is_casting:
                     self._on_fish_caught(caught_notification)
 
-        elif self.current_state == "WAITING_BITE" and caught_notification:
-            # Ca bi bat khong qua minigame (notification phat hien duoc)
-            if self.is_running:  # Guard: khong recast neu bot da dung
+        elif caught_notification:
+            # Ca bi bat khi co notification (ke ca khi state chua kip chuyen sang FISHING)
+            if self.is_running and not self.is_casting:
                 self._on_fish_caught(caught_notification)
 
         else:
             self.active_key = None
-            # Watchdog se xu ly recast khi timeout
 
     def _on_fish_caught(self, caught_notification):
         self.current_state = "IDLE"

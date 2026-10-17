@@ -385,10 +385,9 @@ class RobloxVision:
 
     def detect_key_prompt(self, frame_bgr):
         """
-        Nhận diện phím W/A/D xuất hiện ngẫu nhiên trên toàn màn hình với độ chính xác cao:
-        1. Ưu tiên quét trực tiếp Keycap 1.0x (Direct Template Match): Cực nhanh (~20ms) và chính xác tuyệt đối.
-        2. Mũi tên chỉ hướng của minigame.
-        3. Quét đa tỷ lệ Keycap dự phòng (0.85x, 1.15x, 0.75x, 1.25x...) nếu game có độ phân giải/thu phóng khác.
+        Nhận diện phím W/A/D xuất hiện trên màn hình qua quét đa tỷ lệ chính xác cao:
+        1. Quét nhanh 1.0x (Direct Keycap Matching)
+        2. Nếu màn hình scaling khác: Quét các tỷ lệ [0.85, 1.15, 1.25, 0.75, 0.65, 1.35]
         Returns: dict with 'key', 'confidence', 'pos', 'method' or None
         """
         if frame_bgr is None:
@@ -404,12 +403,12 @@ class RobloxVision:
 
         roi_gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
 
-        # ── TẦNG 1: QUÉT TRỰC TIẾP KEYCAP 1.0X TRÊN ROI (CHÍNH XÁC NHẤT & KHÔNG BỊ NHẦM SKILL) ──
         best_k = None
         best_score = 0.0
         best_loc = None
         best_size = (74, 74)
 
+        # 1. Quét nhanh tỷ lệ chuẩn 1.0x
         for k in ['W', 'A', 'D']:
             if k in self.primary_key_templates:
                 tpl = self.primary_key_templates[k]['full']
@@ -423,7 +422,6 @@ class RobloxVision:
                         best_loc = max_loc
                         best_size = (tw, th)
 
-        # Ngưỡng 0.65 đảm bảo phân biệt rõ ràng chữ W/A/D thật và loại bỏ 100% false positive từ skill hay nước
         if best_score >= 0.65 and best_k is not None:
             abs_x = x1 + best_loc[0] + best_size[0] // 2
             abs_y = y1 + best_loc[1] + best_size[1] // 2
@@ -431,20 +429,10 @@ class RobloxVision:
                 "key": best_k,
                 "confidence": float(best_score),
                 "pos": (abs_x, abs_y),
-                "method": "direct_keycap_1x"
+                "method": "direct_1x"
             }
 
-        # ── TẦNG 2: MŨI TÊN CHỈ HƯỚNG CỦA MINIGAME ──
-        arrow_res = self.detect_cyan_arrow(frame_bgr)
-        if arrow_res is not None:
-            return arrow_res
-
-        # ── TẦNG 3: QUÉT ĐA TỶ LỆ DỰ PHÒNG (NẾU MÀN HÌNH BỊ THU PHÓNG / SCALE KHÁC 1.0) ──
-        scaled_best_k = None
-        scaled_best_score = 0.0
-        scaled_best_loc = None
-        scaled_best_size = (74, 74)
-
+        # 2. Quét đa tỷ lệ cho các màn hình có độ phân giải/thu phóng khác nhau
         for s, scale_dict in self.scaled_key_templates:
             for k in ['W', 'A', 'D']:
                 if k in scale_dict:
@@ -453,18 +441,21 @@ class RobloxVision:
                     if th < roi_gray.shape[0] and tw < roi_gray.shape[1]:
                         res = cv2.matchTemplate(roi_gray, tpl, cv2.TM_CCOEFF_NORMED)
                         _, max_val, _, max_loc = cv2.minMaxLoc(res)
-                        if max_val > scaled_best_score:
-                            scaled_best_score = max_val
-                            scaled_best_k = k
-                            scaled_best_loc = max_loc
-                            scaled_best_size = (tw, th)
+                        if max_val > best_score:
+                            best_score = max_val
+                            best_k = k
+                            best_loc = max_loc
+                            best_size = (tw, th)
+            if best_score >= 0.65:
+                break
 
-        if scaled_best_score >= 0.62 and scaled_best_k is not None:
-            abs_x = x1 + scaled_best_loc[0] + scaled_best_size[0] // 2
-            abs_y = y1 + scaled_best_loc[1] + scaled_best_size[1] // 2
+        # Ngưỡng 0.58 vừa đủ nhạy để bắt kịp mọi animation mà không bị bắt nhầm icon kỹ năng
+        if best_score >= 0.58 and best_k is not None:
+            abs_x = x1 + best_loc[0] + best_size[0] // 2
+            abs_y = y1 + best_loc[1] + best_size[1] // 2
             return {
-                "key": scaled_best_k,
-                "confidence": float(scaled_best_score),
+                "key": best_k,
+                "confidence": float(best_score),
                 "pos": (abs_x, abs_y),
                 "method": "scaled_keycap"
             }
