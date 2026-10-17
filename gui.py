@@ -207,9 +207,9 @@ class FishingBotGUI(ctk.CTk):
         self.entry_charge_time.pack(side="left", padx=3)
         ctk.CTkLabel(cast_cfg_row, text="s", font=ctk.CTkFont(size=10), text_color="#8892B0").pack(side="left", padx=(0, 6))
 
-        ctk.CTkLabel(cast_cfg_row, text="Ném lại sau câu:", font=ctk.CTkFont(size=11)).pack(side="left")
+        ctk.CTkLabel(cast_cfg_row, text="Đứng yên sau câu:", font=ctk.CTkFont(size=11)).pack(side="left")
         self.entry_recast_delay = ctk.CTkEntry(cast_cfg_row, width=42, height=24, font=ctk.CTkFont(size=11, weight="bold"))
-        self.entry_recast_delay.insert(0, str(self.bot.config.get("recast_delay_after_catch", 0.1)))
+        self.entry_recast_delay.insert(0, str(self.bot.config.get("recast_delay_after_catch", 1.2)))
         self.entry_recast_delay.pack(side="left", padx=3)
         ctk.CTkLabel(cast_cfg_row, text="s", font=ctk.CTkFont(size=10), text_color="#8892B0").pack(side="left", padx=(0, 6))
 
@@ -457,7 +457,10 @@ class FishingBotGUI(ctk.CTk):
             elif game_state == "WAITING_BITE":
                 self.lbl_bot_state.configure(text="🌊 ĐÃ THẢ CẦN - ĐANG ĐỢI CÁ CẮN...", text_color="#00E676")
             else:
-                self.lbl_bot_state.configure(text="ĐANG CHỜ BẮT ĐẦU CÂU...", text_color="#8892B0")
+                if st.get("caught_count", 0) > 0:
+                    self.lbl_bot_state.configure(text="🛑 ĐÃ CÂU ĐƯỢC CÁ - ĐỨNG YÊN CHỜ QUĂNG...", text_color="#FFB300")
+                else:
+                    self.lbl_bot_state.configure(text="ĐANG CHỜ BẮT ĐẦU CÂU...", text_color="#8892B0")
 
             ak = st.get("active_key")
             if ak:

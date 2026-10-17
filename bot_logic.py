@@ -11,10 +11,10 @@ CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
 DEFAULT_CONFIG = {
     "auto_cast": True,
     "charge_time_seconds": 1.2,
-    "recast_delay_after_catch": 0.1,
+    "recast_delay_after_catch": 1.2,
     "recast_timeout_seconds": 6.0,
-    "qte_reaction_delay_ms": 120,
-    "qte_press_duration_ms": 40,
+    "qte_reaction_delay_ms": 80,
+    "qte_press_duration_ms": 65,
     "key_mode": "hold",
     "tap_delay_ms": 30,
     "tension_min_safe": 25.0,
@@ -62,6 +62,7 @@ class FishingBot:
         self.current_prompt_key = None
         self.current_prompt_pos = None
         self.current_prompt_first_seen = 0.0
+        self.current_prompt_last_seen = 0.0
         self.current_prompt_pressed = False
 
     # ── Config ──────────────────────────────────────────────────
@@ -127,6 +128,22 @@ class FishingBot:
         for k in ["w", "a", "d", "z", "x", "c", "v"]:
             di.release_key(k)
 
+    # ── KEY & MOVEMENT CLEANUP ──────────────────────────────────
+    def release_all_movement_keys(self):
+        """Nhả sạch toàn bộ phím di chuyển và chuột để nhân vật đứng yên tuyệt đối."""
+        for k in ['w', 'a', 's', 'd', 'space']:
+            try:
+                di.release_key(k)
+            except Exception:
+                pass
+        try:
+            di.mouse_up()
+        except Exception:
+            pass
+
+    def release_all_keys(self):
+        self.release_all_movement_keys()
+
     # ── CAST ─────────────────────────────────────────────────────
     def trigger_auto_cast(self, delay_before=0.0):
         # Non-blocking acquire: neu dang co cast khac thi bo qua ngay
@@ -139,7 +156,14 @@ class FishingBot:
             self.is_casting = True
 
             if delay_before > 0:
-                time.sleep(delay_before)
+                self.current_state = "IDLE"
+                self.release_all_movement_keys()
+                t_end = time.time() + float(delay_before)
+                while time.time() < t_end:
+                    if self.stop_event.is_set() or not self.is_running:
+                        _was_stopped_in_delay = True
+                        return
+                    time.sleep(0.04)
 
             # Kiem tra lai sau delay: neu bot da dung thi thoat
             if self.stop_event.is_set() or not self.is_running:
@@ -370,65 +394,64 @@ class FishingBot:
             cur_pos = key_info.get("pos")
             self.active_key = req_key.upper()
 
-            is_same_prompt = False
-            if self.current_prompt_key == req_key:
-                if cur_pos and self.current_prompt_pos:
-                    dist = ((cur_pos[0] - self.current_prompt_pos[0]) ** 2 + (cur_pos[1] - self.current_prompt_pos[1]) ** 2) ** 0.5
-                    if dist <= 30:
-                        is_same_prompt = True
-                else:
-                    is_same_prompt = True
+            # Kiểm tra xem đây có phải là prompt đang hiển thị không (trong vòng 0.35s gần nhất)
+            is_same_prompt = (
+                self.current_prompt_key == req_key
+                and (now - self.current_prompt_last_seen < 0.35)
+            )
 
             if not is_same_prompt:
-                # Phát hiện mũi tên/prompt MỚI: Bắt đầu quan sát ("nhìn")
+                # Phát hiện phím MỚI: Bắt đầu bấm giờ quan sát ("nhìn đã rồi hãy bấm")
                 self.current_prompt_key = req_key
                 self.current_prompt_pos = cur_pos
                 self.current_prompt_first_seen = now
+                self.current_prompt_last_seen = now
                 self.current_prompt_pressed = False
+            else:
+                self.current_prompt_last_seen = now
+                if cur_pos:
+                    self.current_prompt_pos = cur_pos
 
-            # Tính thời gian mũi tên đã hiển thị ổn định
+            # Thời gian phím đã hiển thị ổn định
             visible_duration = now - self.current_prompt_first_seen
-            reaction_delay = float(self.config.get("qte_reaction_delay_ms", 120)) / 1000.0
+            reaction_delay = float(self.config.get("qte_reaction_delay_ms", 80)) / 1000.0
 
-            # "Nhìn đã rồi hãy bấm": Chỉ khi mũi tên đã xuất hiện ổn định đủ độ trễ và CHƯA từng bấm
+            # "Nhìn đã rồi hãy bấm": Chỉ bấm khi đã quan sát đủ thời gian và CHƯA từng bấm
             if not self.current_prompt_pressed and visible_duration >= reaction_delay:
-                press_duration = float(self.config.get("qte_press_duration_ms", 40)) / 1000.0
-                if is_fg:
-                    di.tap_key(req_key, duration=press_duration)
-                elif self.vision.roblox_hwnd:
-                    di.post_key_to_hwnd(self.vision.roblox_hwnd, req_key, duration=press_duration)
+                press_duration = float(self.config.get("qte_press_duration_ms", 65)) / 1000.0
+                di.tap_key(req_key, duration=press_duration)
 
-                # Đánh dấu ĐÃ BẤM cho mũi tên này -> Tuyệt đối không bấm lặp lại (tránh spam làm game phạt miss)
+                # Đánh dấu ĐÃ BẤM cho phím này -> Tuyệt đối không bấm lặp lại (tránh spam gây miss)
                 self.current_prompt_pressed = True
         else:
-            # Mũi tên đã biến mất khỏi màn hình -> Reset để sẵn sàng cho mũi tên tiếp theo
-            self.active_key = None
-            self.current_prompt_key = None
-            self.current_prompt_pos = None
-            self.current_prompt_first_seen = 0.0
-            self.current_prompt_pressed = False
+            # Nếu tạm thời không thấy key_info trên frame này:
+            # CHỈ reset khi phím đã biến mất thật sự quá 0.25 giây (chống drop frame làm reset timer)!
+            if now - self.current_prompt_last_seen >= 0.25:
+                self.active_key = None
+                self.current_prompt_key = None
+                self.current_prompt_pos = None
+                self.current_prompt_first_seen = 0.0
+                self.current_prompt_pressed = False
 
-        # ── 2. XẢ SKILL Z-X-C-V (KHÔNG LÀM CHẬM PHÍM W/A/D) ──
-        ignore_tension = self.config.get("skills_ignore_tension", True)
-        tension_safe = ignore_tension or (self.tension_status != "DANGER_HIGH")
-        if tension_safe:
-            skill_order = self.config.get("skill_order", ["V", "C", "X", "Z"])
-            burst_mode = self.config.get("skills_burst_mode", True)
-            for s_key in skill_order:
-                s_cfg = self.config["skills"].get(s_key, {})
-                if not s_cfg.get("enabled", True):
-                    continue
-                cd = float(s_cfg.get("cooldown", 5.0))
-                if now - self.skill_cooldowns.get(s_key, 0.0) >= cd:
-                    if is_fg:
-                        di.tap_key(s_key.lower(), duration=0.025)
-                    elif self.vision.roblox_hwnd:
-                        di.post_key_to_hwnd(
-                            self.vision.roblox_hwnd, s_key.lower(), duration=0.025
-                        )
-                    self.skill_cooldowns[s_key] = now
-                    if not burst_mode:
-                        break
+        # ── 2. XẢ SKILL Z-X-C-V (CHỈ XẢ KHI KHÔNG CÓ PHÍM W/A/D ĐANG CHỜ/BẤM) ──
+        # Tuyệt đối không bấm Z/X/C/V khi đang có phím W/A/D để tránh game tính là bấm sai phím
+        wad_active = (self.current_prompt_key is not None and (now - self.current_prompt_last_seen < 0.25))
+        if not wad_active:
+            ignore_tension = self.config.get("skills_ignore_tension", True)
+            tension_safe = ignore_tension or (self.tension_status != "DANGER_HIGH")
+            if tension_safe:
+                skill_order = self.config.get("skill_order", ["V", "C", "X", "Z"])
+                burst_mode = self.config.get("skills_burst_mode", True)
+                for s_key in skill_order:
+                    s_cfg = self.config["skills"].get(s_key, {})
+                    if not s_cfg.get("enabled", True):
+                        continue
+                    cd = float(s_cfg.get("cooldown", 5.0))
+                    if now - self.skill_cooldowns.get(s_key, 0.0) >= cd:
+                        di.tap_key(s_key.lower(), duration=0.030)
+                        self.skill_cooldowns[s_key] = now
+                        if not burst_mode:
+                            break
 
     def _handle_no_minigame(self, frame):
         caught_notification = self.vision.detect_caught_notification(frame)
@@ -453,12 +476,14 @@ class FishingBot:
         self.active_key = None
         self.fish_caught_count += 1
 
+        # 1. Nhả sạch toàn bộ phím di chuyển và chuột để nhân vật đứng yên hoàn toàn
+        self.release_all_movement_keys()
+
+        # 2. Đứng yên sau khi câu cá lên xong xuôi, sau đó mới quăng cần xuống tiếp
         if self.config.get("auto_cast", True) and not self.is_casting:
-            recast_delay = 0.05 if caught_notification else float(
-                self.config.get("recast_delay_after_catch", 0.1)
-            )
+            stand_delay = float(self.config.get("recast_delay_after_catch", 1.2))
             threading.Thread(
                 target=self.trigger_auto_cast,
-                args=(recast_delay,),
+                args=(stand_delay,),
                 daemon=True
             ).start()

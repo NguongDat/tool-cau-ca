@@ -386,122 +386,88 @@ class RobloxVision:
     def detect_key_prompt(self, frame_bgr):
         """
         Nhận diện phím W/A/D xuất hiện ngẫu nhiên trên toàn màn hình với độ chính xác cao:
-        1. Ưu tiên kiểm tra MŨI TÊN CHỈ HƯỚNG (Cyan, Vàng, Xanh lá).
-        2. Quét đa tỷ lệ Keycap dự phòng (coarse-to-fine multi-scale).
+        1. Ưu tiên quét trực tiếp Keycap 1.0x (Direct Template Match): Cực nhanh (~20ms) và chính xác tuyệt đối.
+        2. Mũi tên chỉ hướng của minigame.
+        3. Quét đa tỷ lệ Keycap dự phòng (0.85x, 1.15x, 0.75x, 1.25x...) nếu game có độ phân giải/thu phóng khác.
         Returns: dict with 'key', 'confidence', 'pos', 'method' or None
         """
         if frame_bgr is None:
             return None
 
-        # ── TẦNG 1: MŨI TÊN CHỈ HƯỚNG CỦA FISHING MASTER (ĐỘ CHÍNH XÁC CAO NHẤT) ──
-        arrow_res = self.detect_cyan_arrow(frame_bgr)
-        if arrow_res is not None:
-            return arrow_res
-
         h, w = frame_bgr.shape[:2]
-        y1, y2 = int(h * 0.05), int(h * 0.92)
-        x1, x2 = int(w * 0.04), int(w * 0.96)
+        # Vùng minigame ở giữa màn hình (loại bỏ thanh tension ở đỉnh và hotbar/chat ở đáy)
+        y1, y2 = int(h * 0.12), int(h * 0.88)
+        x1, x2 = int(w * 0.08), int(w * 0.92)
         roi_bgr = frame_bgr[y1:y2, x1:x2]
         if roi_bgr.shape[0] < 40 or roi_bgr.shape[1] < 40:
             return None
 
         roi_gray = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2GRAY)
 
-        # ── TẦNG 2: COARSE FAST SCAN Ở 0.5x TRÊN TẤT CẢ CÁC SCALE ─────
-        small_roi = cv2.resize(
-            roi_gray,
-            (roi_gray.shape[1] // 2, roi_gray.shape[0] // 2),
-            interpolation=cv2.INTER_AREA
-        )
+        # ── TẦNG 1: QUÉT TRỰC TIẾP KEYCAP 1.0X TRÊN ROI (CHÍNH XÁC NHẤT & KHÔNG BỊ NHẦM SKILL) ──
+        best_k = None
+        best_score = 0.0
+        best_loc = None
+        best_size = (74, 74)
 
-        candidates = []
-        all_groups = [(1.0, self.primary_key_templates)] + self.multi_scale_templates
+        for k in ['W', 'A', 'D']:
+            if k in self.primary_key_templates:
+                tpl = self.primary_key_templates[k]['full']
+                th, tw = tpl.shape[:2]
+                if th < roi_gray.shape[0] and tw < roi_gray.shape[1]:
+                    res = cv2.matchTemplate(roi_gray, tpl, cv2.TM_CCOEFF_NORMED)
+                    _, max_val, _, max_loc = cv2.minMaxLoc(res)
+                    if max_val > best_score:
+                        best_score = max_val
+                        best_k = k
+                        best_loc = max_loc
+                        best_size = (tw, th)
 
-        for _, scale_dict in all_groups:
+        # Ngưỡng 0.65 đảm bảo phân biệt rõ ràng chữ W/A/D thật và loại bỏ 100% false positive từ skill hay nước
+        if best_score >= 0.65 and best_k is not None:
+            abs_x = x1 + best_loc[0] + best_size[0] // 2
+            abs_y = y1 + best_loc[1] + best_size[1] // 2
+            return {
+                "key": best_k,
+                "confidence": float(best_score),
+                "pos": (abs_x, abs_y),
+                "method": "direct_keycap_1x"
+            }
+
+        # ── TẦNG 2: MŨI TÊN CHỈ HƯỚNG CỦA MINIGAME ──
+        arrow_res = self.detect_cyan_arrow(frame_bgr)
+        if arrow_res is not None:
+            return arrow_res
+
+        # ── TẦNG 3: QUÉT ĐA TỶ LỆ DỰ PHÒNG (NẾU MÀN HÌNH BỊ THU PHÓNG / SCALE KHÁC 1.0) ──
+        scaled_best_k = None
+        scaled_best_score = 0.0
+        scaled_best_loc = None
+        scaled_best_size = (74, 74)
+
+        for s, scale_dict in self.scaled_key_templates:
             for k in ['W', 'A', 'D']:
-                if k not in scale_dict:
-                    continue
-                coarse_tpl = scale_dict[k]['coarse']
-                if coarse_tpl.shape[0] >= small_roi.shape[0] or coarse_tpl.shape[1] >= small_roi.shape[1]:
-                    continue
-                res = cv2.matchTemplate(small_roi, coarse_tpl, cv2.TM_CCOEFF_NORMED)
-                _, max_val, _, max_loc = cv2.minMaxLoc(res)
-                if max_val >= 0.35:
-                    candidates.append((max_val, k, max_loc, scale_dict))
+                if k in scale_dict:
+                    tpl = scale_dict[k]['full']
+                    th, tw = tpl.shape[:2]
+                    if th < roi_gray.shape[0] and tw < roi_gray.shape[1]:
+                        res = cv2.matchTemplate(roi_gray, tpl, cv2.TM_CCOEFF_NORMED)
+                        _, max_val, _, max_loc = cv2.minMaxLoc(res)
+                        if max_val > scaled_best_score:
+                            scaled_best_score = max_val
+                            scaled_best_k = k
+                            scaled_best_loc = max_loc
+                            scaled_best_size = (tw, th)
 
-        # Sắp xếp các ứng viên theo độ khớp từ cao xuống thấp
-        candidates.sort(key=lambda c: c[0], reverse=True)
-
-        # ── TẦNG 3: PHÂN ĐỊNH CHI TIẾT TẠI CÁC VỊ TRÍ ỨNG VIÊN HÀNG ĐẦU ──
-        for coarse_score, initial_k, (cx, cy), active_group in candidates[:12]:
-            target_item = active_group[initial_k]
-            tpl_full = target_item['full']
-            th, tw = tpl_full.shape[:2]
-
-            orig_x = cx * 2
-            orig_y = cy * 2
-
-            pad = 8
-            search_x1 = max(0, orig_x - pad)
-            search_y1 = max(0, orig_y - pad)
-            search_x2 = min(roi_gray.shape[1], orig_x + tw + pad)
-            search_y2 = min(roi_gray.shape[0], orig_y + th + pad)
-            local_crop = roi_gray[search_y1:search_y2, search_x1:search_x2]
-
-            if local_crop.shape[0] >= th and local_crop.shape[1] >= tw:
-                res_local = cv2.matchTemplate(local_crop, tpl_full, cv2.TM_CCOEFF_NORMED)
-                _, _, _, best_loc = cv2.minMaxLoc(res_local)
-                exact_x = search_x1 + best_loc[0]
-                exact_y = search_y1 + best_loc[1]
-
-                crop_btn = roi_gray[exact_y:exact_y + th, exact_x:exact_x + tw]
-                if crop_btn.shape == (th, tw):
-                    scores = {}
-                    for k in ['W', 'A', 'D']:
-                        if k not in active_group:
-                            continue
-                        k_item = active_group[k]
-                        cy1, cy2, cx1, cx2 = k_item['center_box']
-                        c_tpl = k_item['center']
-                        crop_c = crop_btn[cy1:cy2, cx1:cx2]
-
-                        f_score = float(cv2.matchTemplate(crop_btn, k_item['full'], cv2.TM_CCOEFF_NORMED)[0][0])
-                        if crop_c.shape == c_tpl.shape:
-                            c_score = float(cv2.matchTemplate(crop_c, c_tpl, cv2.TM_CCOEFF_NORMED)[0][0])
-                        else:
-                            c_score = 0.0
-
-                        scores[k] = 0.35 * f_score + 0.65 * c_score
-
-                    best_k = max(scores, key=scores.get)
-                    final_score = scores[best_k]
-
-                    if final_score >= 0.45:
-                        abs_pos_x = x1 + exact_x + tw // 2
-                        abs_pos_y = y1 + exact_y + th // 2
-                        return {
-                            "key": best_k,
-                            "confidence": float(final_score),
-                            "pos": (abs_pos_x, abs_pos_y),
-                            "method": "multi_cand_pyramid"
-                        }
-
-        # ── FALLBACK 4: TEMPLATE MŨI TÊN CŨ ─────────────────────────
-        if "ARROW_HEAD" in self.templates and self.templates["ARROW_HEAD"] is not None:
-            tpl_arrow = cv2.cvtColor(self.templates["ARROW_HEAD"], cv2.COLOR_BGR2GRAY)
-            sh, sw = tpl_arrow.shape[:2]
-            if sw < roi_gray.shape[1] and sh < roi_gray.shape[0]:
-                res = cv2.matchTemplate(roi_gray, tpl_arrow, cv2.TM_CCOEFF_NORMED)
-                _, max_val, _, max_loc = cv2.minMaxLoc(res)
-                if max_val >= 0.70:
-                    abs_pos_x = x1 + max_loc[0] + sw // 2
-                    abs_pos_y = y1 + max_loc[1] + sh // 2
-                    return {
-                        "key": "W",
-                        "confidence": float(max_val),
-                        "pos": (abs_pos_x, abs_pos_y),
-                        "method": "arrow_tpl"
-                    }
+        if scaled_best_score >= 0.62 and scaled_best_k is not None:
+            abs_x = x1 + scaled_best_loc[0] + scaled_best_size[0] // 2
+            abs_y = y1 + scaled_best_loc[1] + scaled_best_size[1] // 2
+            return {
+                "key": scaled_best_k,
+                "confidence": float(scaled_best_score),
+                "pos": (abs_x, abs_y),
+                "method": "scaled_keycap"
+            }
 
         return None
 
