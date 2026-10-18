@@ -1,41 +1,42 @@
-# 🎣 Roblox Fishing Master - Auto Pro
+# 🎣 Tool Auto Bậc Thầy Câu Cá (Roblox Fishing Master)
 
-Công cụ tự động câu cá chuyên nghiệp cho tựa game **Fishing Master** trên Roblox:
-1. **Tự động câu W/A/D & tung chiêu Z-X-C-V thông minh**.
-2. **Tự sạc chuột trái đạt mốc x5 DAMAGE** khi quăng cần và tự động quăng lại (Auto Recast).
-3. **Kiểm soát thanh căng dây cá (Tension bar)** giúp không bị tuột cá.
-4. **Hỗ trợ đứng yên nhân vật** chống trôi vị trí khi câu.
-5. **Giao diện trực quan hiện đại & Phím tắt tiện lợi**.
+Tool tự động câu cá chuyên nghiệp, siêu tốc và ổn định dành cho tựa game **Bậc Thầy Câu Cá (Fishing Master)** trên Roblox, kết hợp công nghệ **Thị giác máy tính (Computer Vision - OpenCV)** và **Phím ảo phần cứng cấp độ Driver (PyDirectInput + user32)**.
 
 ---
 
-## 🌟 Các Tính Năng Chính
+## 🌟 Tính Năng Nổi Bật
 
-### 1. 🎣 Tự Động Câu W/A/D & Skills Thông Minh
-- Tự động nhận diện phím W, A, D và hướng mũi tên cyan bằng Computer Vision OpenCV.
-- Giữ phím bằng DirectX Hardware Scancodes giúp Roblox nhận diện 100%.
-- Tự động combo tuyệt chiêu Z - X - C - V theo thời gian hồi chiêu độc lập.
-- Kiểm soát thanh cá (Tension): Giữ dây an toàn, tránh đứt cước hoặc sổng cá.
+### 1. 🍀 Tự Động Quăng Cần & Đạt Nóc Luck Boost
+- Tự động giữ chuột trái và dùng OpenCV quét thanh **LUCK BOOST**.
+- Canh chính xác thời điểm dải sáng chạm nóc bo tròn **màu xanh lá cây** mới nhả chuột, giúp quăng cần đạt tỉ lệ may mắn cao nhất (100% Luck Boost).
 
-### 2. ⚡ Tự Động Quăng Cần & Sạc Lực (x5 Damage)
-- Giữ chuột trái tự sạc đầy thanh lực đạt mức damage tối đa `x5 DAMAGE`.
-- Cơ chế Auto Loop: Tự động quăng lại cần ngay sau khi câu được cá hoặc sau timeout chờ cắn.
+### 2. 💥 Bắt Chuẩn Mốc x10 DAMAGE Khi Cá Cắn Câu
+- Khi cá cắn câu, thanh sát thương xuất hiện (dải màu cyan $\rightarrow$ tím $\rightarrow$ đỏ mốc **x10 DAMAGE**).
+- Bot theo dõi chính xác icon con cá trượt lên đỉnh, chạm vùng đỏ **x10 DAMAGE** là click giật cần ngay lập tức để gây lượng sát thương khởi đầu cực đại.
 
-### 3. 🛑 Chế Độ Giữ Nhân Vật Đứng Yên
-- Tùy chọn tắt di chuyển W/A/D giúp nhân vật giữ nguyên vị trí đắc địa khi câu cá, không bị trôi ngã xuống nước.
+### 3. ⚡ Xả Combo Skill Siêu Tốc Không Độ Trễ (`Z -> C -> X -> V`)
+- Cơ chế xả liên hoàn: Dùng xong skill này là xả ngay skill kế tiếp chỉ sau **25ms** (không có vòng lặp ngắt quãng hay delay thừa).
+- Tối ưu hồi chiêu xuống **1.5s - 2.5s**, tự động reset hồi chiêu về 0 ngay khi vừa cắn câu để tung trọn bộ combo từ frame đầu tiên.
+- **Ghìm thanh trượt cá liên tục**: Tự động spam click chuột trái dứt khoát cấp phần cứng để ghìm thanh trượt cá trong lúc chờ skill hồi, ngăn chặn triệt để tình trạng thanh cá tăng cao làm trượt/sổng cá.
+
+### 4. 🎯 Phản Xạ QTE [A], [W], [D], [S] & Mũi Tên Chuẩn 100%
+- Nhận diện ký tự phím QTE siêu tốc (> 100 FPS), kích hoạt chính xác sự kiện phím cho Roblox, chống miss nhịp QTE.
+- Tự động tạm dừng spam click khi có QTE để tránh bị game hủy nhịp.
+
+### 5. 🛑 Nhân Vật Đứng Yên Tuyệt Đối
+- Đứng yên 100% tại chỗ khi câu và sau khi kéo cá lên, lập tức quăng cần mới.
+- Loại bỏ hoàn toàn di chuyển thừa thãi, không lo rơi xuống nước hay kẹt địa hình.
 
 ---
 
-## 🎮 Hướng Dẫn Sử Dụng & Phím Tắt
+## 🎮 Phím Tắt & Điều Khiển
 
-### Phím tắt nhanh:
-- **`F6`**: **Bật / Tắt Tự Động Câu Cá** (Tự sạc lực ném cần, bấm W/A/D và xả skill Z-X-C-V).
+* **Phím F6:** Bật / Tắt Auto (Bấm F6 để bắt đầu, bấm F6 lần nữa để dừng lại ngay lập tức).
 
 ---
 
-## 🚀 Cách Chạy & Chia Sẻ Cho Bạn Bè
+## 🚀 Cách Chạy Tool
 
-1. **Chạy trực tiếp từ file Batch**:
-   - Bấm đúp vào file **`run_tool.bat`** để khởi chạy tool.
-2. **Đã đóng gói thành App độc lập (.exe)**:
-   - Có thể mở trực tiếp trong thư mục `dist/FishingMaster_Auto_Pro` để chạy mà không cần cài đặt môi trường.
+1. Nhấp đúp chuột vào file: **`Chay_Tool.bat`** (hoặc mở terminal gõ `python main.py`).
+2. Cầm sẵn cần câu trên tay nhân vật, hướng góc nhìn ra mặt nước.
+3. Bấm **F6** để bắt đầu auto!

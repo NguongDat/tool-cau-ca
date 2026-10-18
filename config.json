@@ -1,39 +1,43 @@
 {
-    "auto_cast": true,
-    "charge_time_seconds": 0.7,
-    "recast_delay_after_catch": 0.5,
-    "recast_timeout_seconds": 6.0,
-    "qte_reaction_delay_ms": 25,
-    "qte_press_duration_ms": 45,
-    "key_mode": "hold",
-    "tap_delay_ms": 30,
-    "tension_min_safe": 25.0,
-    "tension_max_safe": 75.0,
-    "skills": {
-        "Z": {
+    "cast_hold_time": 2.3,
+    "cast_cooldown": 0.6,
+    "wait_bite_timeout": 3.0,
+    "skills": [
+        {
+            "key": "Z",
+            "name": "Heaven-Lifting Hook",
             "enabled": true,
-            "cooldown": 0.2
+            "cooldown": 1.5,
+            "priority": 1
         },
-        "X": {
+        {
+            "key": "C",
+            "name": "Rod Gate-Open",
             "enabled": true,
-            "cooldown": 0.1
+            "cooldown": 1.5,
+            "priority": 2
         },
-        "C": {
+        {
+            "key": "X",
+            "name": "Rod Gate-Block",
             "enabled": true,
-            "cooldown": 0.1
+            "cooldown": 2.0,
+            "priority": 3
         },
-        "V": {
+        {
+            "key": "V",
+            "name": "Fish-Beating Staff Technique",
             "enabled": true,
-            "cooldown": 0.2
+            "cooldown": 2.5,
+            "priority": 4
         }
-    },
-    "skill_order": [
-        "V",
-        "C",
-        "X",
-        "Z"
     ],
-    "disable_wasd_movement": true,
-    "skills_ignore_tension": true,
-    "skills_burst_mode": true
+    "spam_click": true,
+    "click_delay_ms": 40,
+    "qte_enabled": true,
+    "qte_press_delay_ms": 60,
+    "current_fish": 612,
+    "hotkey_toggle": "f6",
+    "skill_delay_ms": 25,
+    "skill_hold_ms": 30
 }
